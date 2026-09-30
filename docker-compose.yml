@@ -1,0 +1,57 @@
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: payment_ledger_db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: payment_ledger
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d payment_ledger"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: payment_ledger_api
+    restart: always
+    ports:
+      - "3001:3001"
+    environment:
+      - PORT=3001
+      - DATABASE_URL=postgresql://postgres:postgres@db:5432/payment_ledger?schema=public
+      - NODE_ENV=development
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./api:/app
+      - /app/node_modules
+      - ./PAYMENT LEDGER.xlsx:/app/PAYMENT LEDGER.xlsx:ro
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: payment_ledger_web
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      - VITE_API_URL=http://localhost:3001
+    depends_on:
+      - api
+    volumes:
+      - ./web:/app
+      - /app/node_modules
+
+volumes:
+  postgres_data:

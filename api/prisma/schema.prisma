@@ -1,0 +1,114 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum WorkerStatus {
+  ACTIVE
+  CLEARED
+  INACTIVE
+}
+
+enum LedgerEntryType {
+  DEBT_ADDED
+  PAYMENT
+}
+
+enum LedgerEntrySource {
+  SMS_PARSED
+  MANUAL
+}
+
+model PaymentMode {
+  id         String        @id @default(cuid())
+  name       String        @unique // "Momo", "Cash", "Bank Transfer"
+  created_at DateTime      @default(now())
+
+  ledger_entries LedgerEntry[]
+
+  @@map("payment_modes")
+}
+
+model Worker {
+  id                      String         @id @default(cuid())
+  name                    String
+  phone                   String?
+  occupation              String         @default("Driver")
+  car_type                String?
+  number_plate            String?
+  initial_debt            Decimal        @db.Decimal(12, 2)
+  expected_weekly_payment Decimal        @db.Decimal(12, 2)
+  start_date              DateTime
+  expected_end_date       DateTime
+  status                  WorkerStatus   @default(ACTIVE)
+  details                 Json?
+  notes                   String?
+  created_at              DateTime       @default(now())
+  updated_at              DateTime       @updatedAt
+
+  aliases                 WorkerAlias[]
+  ledger_entries          LedgerEntry[]
+
+  @@map("workers")
+}
+
+model WorkerAlias {
+  id         String   @id @default(cuid())
+  worker_id  String
+  alias_name String
+  created_at DateTime @default(now())
+
+  worker     Worker   @relation(fields: [worker_id], references: [id], onDelete: Cascade)
+
+  @@index([worker_id])
+  @@index([alias_name])
+  @@map("worker_aliases")
+}
+
+model LedgerEntry {
+  id              String            @id @default(cuid())
+  worker_id       String
+  payment_mode_id String?
+  type            LedgerEntryType
+  amount          Decimal           @db.Decimal(12, 2)
+  entry_date      DateTime
+  transaction_ref String?           @unique
+  sender_name     String?
+  payment_number  Int?
+  source          LedgerEntrySource @default(MANUAL)
+  provider        String?
+  note            String?
+  created_at      DateTime          @default(now())
+
+  worker          Worker            @relation(fields: [worker_id], references: [id], onDelete: Restrict)
+  payment_mode    PaymentMode?      @relation(fields: [payment_mode_id], references: [id], onDelete: SetNull)
+
+  @@index([worker_id])
+  @@index([entry_date])
+  @@index([payment_mode_id])
+  @@map("ledger_entries")
+}
+
+model SmsPattern {
+  id            String   @id @default(cuid())
+  name          String
+  provider      String   @default("MTN") // "MTN", "TELECEL", "AT", "BANK", "OTHER"
+  example_sms   String   @db.Text
+  pattern_regex String   @db.Text
+  amount_group  Int?     @default(1)
+  ref_group     Int?     @default(2)
+  sender_group  Int?     @default(3)
+  phone_group   Int?
+  date_group    Int?
+  note_group    Int?
+  date_missing  Boolean  @default(false)
+  is_active     Boolean  @default(true)
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  @@map("sms_patterns")
+}
