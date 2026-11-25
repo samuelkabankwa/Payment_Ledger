@@ -17,7 +17,10 @@ export class DuplicateTransactionError extends Error {
   };
 
   constructor(existing: any) {
-    super(`Transaction reference ${existing.transaction_ref} already recorded`);
+    super(
+      `Transaction reference ${existing.transaction_ref} is already recorded under worker "${existing.worker.name}". ` +
+      `If this transaction belongs to a different worker, the ref may have been entered against the wrong account.`
+    );
     this.name = "DuplicateTransactionError";
     this.existingEntry = {
       id: existing.id,
@@ -57,7 +60,9 @@ export class LedgerService {
     }
 
     // 3. Remember alias if requested
-    if (data.remember_alias && data.sender_name && data.sender_name.trim().length > 0) {
+    let aliasCreated = false;
+    const shouldRememberAlias = Boolean(data.remember_alias || data.save_alias_if_new);
+    if (shouldRememberAlias && data.sender_name && data.sender_name.trim().length > 0) {
       const cleanSender = data.sender_name.trim();
       const isSameAsWorkerName =
         cleanSender.toLowerCase() === worker.name.toLowerCase();
@@ -77,6 +82,7 @@ export class LedgerService {
               alias_name: cleanSender,
             },
           });
+          aliasCreated = true;
         }
       }
     }
@@ -129,7 +135,16 @@ export class LedgerService {
 
     return {
       entry,
+      alias_created: aliasCreated,
       worker_balance: metrics,
+      worker: {
+        id: worker.id,
+        name: worker.name,
+        initial_debt: metrics.initial_debt,
+        total_debt_added: metrics.total_debt_added,
+        total_paid: metrics.total_paid,
+        outstanding_debt: metrics.outstanding_debt,
+      },
     };
   }
 

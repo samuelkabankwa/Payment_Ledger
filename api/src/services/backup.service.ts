@@ -17,6 +17,14 @@ export class BackupService {
       orderBy: [{ entry_date: "asc" }, { created_at: "asc" }],
     });
 
+    const paymentModes = await prisma.paymentMode.findMany({
+      orderBy: { created_at: "asc" },
+    });
+
+    const smsPatterns = await prisma.smsPattern.findMany({
+      orderBy: { created_at: "asc" },
+    });
+
     return {
       backup_version: "1.0.0",
       app: "Worker Debt Ledger",
@@ -25,11 +33,15 @@ export class BackupService {
         workers: workers.length,
         aliases: aliases.length,
         ledger_entries: ledgerEntries.length,
+        payment_modes: paymentModes.length,
+        sms_patterns: smsPatterns.length,
       },
       data: {
         workers,
         aliases,
         ledger_entries: ledgerEntries,
+        payment_modes: paymentModes,
+        sms_patterns: smsPatterns,
       },
     };
   }

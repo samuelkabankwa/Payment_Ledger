@@ -90,7 +90,23 @@ export function WorkerListView({
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <button
+            onClick={() => window.open(api.getExportAllUrl(), '_blank')}
+            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-semibold text-xs shadow-sm transition-all"
+            title="Download debt and pace summary sheet for all workers"
+          >
+            <FileSpreadsheet className="w-4 h-4 text-emerald-400" />
+            <span>Summary (Excel)</span>
+          </button>
+          <button
+            onClick={() => window.open(api.getAllRecordsChronologicalUrl(), '_blank')}
+            className="flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shadow-md shadow-emerald-500/20 transition-all"
+            title="Download all ledger entries for all drivers, sorted by date"
+          >
+            <FileSpreadsheet className="w-4 h-4" />
+            <span>All Records (Excel)</span>
+          </button>
           <button
             onClick={onOpenAddWorker}
             className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs shadow-md shadow-blue-500/20 transition-all"

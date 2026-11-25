@@ -343,6 +343,10 @@ export const api = {
     return `${API_BASE_URL}/workers/export-all.xlsx`;
   },
 
+  getAllRecordsChronologicalUrl(): string {
+    return `${API_BASE_URL}/workers/export-all-records.xlsx`;
+  },
+
   getWorkerExportUrl(workerId: string): string {
     return `${API_BASE_URL}/workers/${workerId}/export.xlsx`;
   },

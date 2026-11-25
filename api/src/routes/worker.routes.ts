@@ -7,6 +7,7 @@ const router = Router();
 
 // Exports (must precede /:id)
 router.get("/export-all.xlsx", ExportController.exportAllWorkers);
+router.get("/export-all-records.xlsx", ExportController.exportAllRecordsChronological);
 
 // Worker CRUD
 router.post("/", WorkerController.createWorker);

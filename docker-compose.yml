@@ -35,7 +35,8 @@ services:
     volumes:
       - ./api:/app
       - /app/node_modules
-      - ./PAYMENT LEDGER.xlsx:/app/PAYMENT LEDGER.xlsx:ro
+      # Uncomment if you want to mount a local Excel file for legacy import:
+      # - ./PAYMENT LEDGER.xlsx:/app/PAYMENT LEDGER.xlsx:ro
 
   web:
     build:
@@ -44,7 +45,7 @@ services:
     container_name: payment_ledger_web
     restart: always
     ports:
-      - "3000:3000"
+      - "3005:3005"
     environment:
       - VITE_API_URL=http://localhost:3001
     depends_on:

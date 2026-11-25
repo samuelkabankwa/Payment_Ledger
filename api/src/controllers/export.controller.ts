@@ -52,6 +52,27 @@ export class ExportController {
   }
 
   /**
+   * Export all ledger records chronologically (all drivers combined, sorted by date)
+   * GET /workers/export-all-records.xlsx
+   */
+  static async exportAllRecordsChronological(_req: Request, res: Response) {
+    try {
+      const buffer = await ExcelService.generateAllRecordsChronological();
+      const filename = `all_records_chronological_${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+      res.setHeader(
+        "Content-Type",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+      );
+      res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
+      return res.send(buffer);
+    } catch (error: any) {
+      console.error("Error generating all-records chronological export:", error);
+      return res.status(500).json({ error: error.message || "Failed to generate all-records export" });
+    }
+  }
+
+  /**
    * One-click full database dump to JSON
    * GET /backup.json
    */

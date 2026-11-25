@@ -95,9 +95,10 @@ export function DashboardView({
 
   const { kpis, workers_near_clearing, workers_overdue, cashflow_trend } = data;
 
+  const totalFleetDebt = kpis.total_initial_debt + (kpis.total_debt_added || 0);
   const collectionRate =
-    kpis.total_initial_debt > 0
-      ? Math.round((kpis.total_collected_all_time / kpis.total_initial_debt) * 1000) / 10
+    totalFleetDebt > 0
+      ? Math.round((kpis.total_collected_all_time / totalFleetDebt) * 1000) / 10
       : 0;
 
   return (

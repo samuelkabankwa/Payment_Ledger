@@ -77,6 +77,14 @@ export class SmsParserService {
    * 5. Payment received from ... for GHS ... Transaction ID: ...
    */
   static parseMtn(text: string): ParsedSmsResult | null {
+    if (
+      /Telecel|Vodafone/i.test(text) ||
+      /^\d{16}\s+Confirmed\./i.test(text) ||
+      /ATMoney|AT Money|AirtelTigo/i.test(text)
+    ) {
+      return null;
+    }
+
     const isMtn =
       /MTN|MoMo|Mobile Money/i.test(text) ||
       text.includes("Payment received for GHS") ||
@@ -246,10 +254,13 @@ export class SmsParserService {
       }
     }
 
-    // 5. Note / Ref
-    const refMatch = text.match(/(?:Ref|Reference):\s*([^.\n\r]+)/i);
-    if (refMatch) {
-      note = refMatch[1].trim();
+    // 5. Note / Ref: prefer standalone Ref/Reference line, then inline
+    const standaloneRef = text.match(/(?:\r?\n|^)\s*(?:Ref|Reference):\s*([^.\r\n]+)/i);
+    const inlineRef = text.match(/(?:Ref|Reference):\s*([^.\n\r]+)/i);
+    if (standaloneRef) {
+      note = standaloneRef[1].trim();
+    } else if (inlineRef) {
+      note = inlineRef[1].trim();
     }
 
     if (senderName) {
@@ -458,26 +469,71 @@ export class SmsParserService {
 
     // 1. Try trained custom patterns from database
     const customResult = await this.parseWithCustomPatterns(text);
-    if (customResult && (customResult.amount !== null || customResult.transaction_ref !== null)) {
+    if (customResult && customResult.success) {
       return customResult;
     }
 
-    // 2. Try MTN
+    // Provider markers
+    const isTelecelText =
+      /^\d{16}\s+Confirmed\./i.test(text) ||
+      /Telecel|Vodafone/i.test(text);
+
+    const isAtText = /ATMoney|AT Money|AirtelTigo/i.test(text);
+
+    // If strong Telecel indicator, try Telecel first
+    if (isTelecelText) {
+      const telecelResult = this.parseTelecel(text);
+      if (telecelResult && telecelResult.success) {
+        return telecelResult;
+      }
+    }
+
+    // If strong AT indicator, try AT first
+    if (isAtText) {
+      const atResult = this.parseAT(text);
+      if (atResult && atResult.success) {
+        return atResult;
+      }
+    }
+
+    // Try MTN
     const mtnResult = this.parseMtn(text);
-    if (mtnResult && (mtnResult.amount !== null || mtnResult.transaction_ref !== null)) {
+    if (mtnResult && mtnResult.success) {
       return mtnResult;
     }
 
-    // 3. Try Telecel
-    const telecelResult = this.parseTelecel(text);
-    if (telecelResult && (telecelResult.amount !== null || telecelResult.transaction_ref !== null)) {
-      return telecelResult;
+    // If Telecel wasn't tried yet, try now
+    if (!isTelecelText) {
+      const telecelResult = this.parseTelecel(text);
+      if (telecelResult && telecelResult.success) {
+        return telecelResult;
+      }
     }
 
-    // 4. Try AT Money
-    const atResult = this.parseAT(text);
-    if (atResult && (atResult.amount !== null || atResult.transaction_ref !== null)) {
-      return atResult;
+    // If AT wasn't tried yet, try now
+    if (!isAtText) {
+      const atResult = this.parseAT(text);
+      if (atResult && atResult.success) {
+        return atResult;
+      }
+    }
+
+    // Fallbacks if only partial match
+    const candidates = [
+      customResult,
+      isTelecelText ? this.parseTelecel(text) : mtnResult,
+      isTelecelText ? mtnResult : this.parseTelecel(text),
+      this.parseAT(text),
+    ].filter(
+      (r): r is ParsedSmsResult =>
+        !!r && (r.amount !== null || r.transaction_ref !== null)
+    );
+
+    if (candidates.length > 0) {
+      const best =
+        candidates.find((c) => c.amount !== null && c.transaction_ref !== null) ||
+        candidates[0];
+      return best;
     }
 
     // 5. Fallback

@@ -384,4 +384,174 @@ export class ExcelService {
     const buffer = await workbook.xlsx.writeBuffer();
     return Buffer.from(buffer);
   }
+
+  /**
+   * All records chronological export (.xlsx)
+   * All ledger entries across all workers, sorted by date ascending.
+   * Columns: Date | Driver Name | Car Type | Plate | Type | Amount | Running Balance (per driver) | Transaction Ref | Sender | Notes
+   */
+  static async generateAllRecordsChronological(): Promise<Buffer> {
+    // Fetch all workers with their ledger entries
+    const workers = await prisma.worker.findMany({
+      include: {
+        ledger_entries: {
+          orderBy: [{ entry_date: "asc" }, { created_at: "asc" }],
+        },
+      },
+    });
+
+    // Build a flat list of all entries, attaching per-driver running balance
+    type FlatEntry = {
+      entry_date: Date;
+      worker_name: string;
+      car_type: string | null;
+      number_plate: string | null;
+      type: string;
+      amount: number;
+      running_balance: number;
+      transaction_ref: string | null;
+      sender_name: string | null;
+      note: string | null;
+    };
+
+    const allEntries: FlatEntry[] = [];
+
+    for (const worker of workers) {
+      const numbered = attachPaymentNumbersAndRunningBalance(
+        worker.initial_debt,
+        worker.ledger_entries
+      );
+      for (const entry of numbered) {
+        allEntries.push({
+          entry_date: new Date(entry.entry_date),
+          worker_name: worker.name,
+          car_type: worker.car_type,
+          number_plate: worker.number_plate,
+          type: entry.type,
+          amount: Number(entry.amount),
+          running_balance: entry.running_balance,
+          transaction_ref: entry.transaction_ref || null,
+          sender_name: entry.sender_name || null,
+          note: entry.note || null,
+        });
+      }
+    }
+
+    // Sort all entries by date ascending, then by worker name for same-day ties
+    allEntries.sort((a, b) => {
+      const dateDiff = a.entry_date.getTime() - b.entry_date.getTime();
+      if (dateDiff !== 0) return dateDiff;
+      return a.worker_name.localeCompare(b.worker_name);
+    });
+
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = "Worker Debt Ledger";
+    workbook.created = new Date();
+
+    const ws = workbook.addWorksheet("All Records – Chronological", {
+      views: [{ showGridLines: true }],
+    });
+
+    // Title
+    ws.mergeCells("A1:J1");
+    const titleCell = ws.getCell("A1");
+    titleCell.value = `ALL DRIVER RECORDS – CHRONOLOGICAL  (${allEntries.length} entries across ${workers.length} drivers)`;
+    titleCell.font = { name: "Arial", size: 13, bold: true, color: { argb: "FFFFFFFF" } };
+    titleCell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0F172A" } };
+    titleCell.alignment = { vertical: "middle", horizontal: "center" };
+    ws.getRow(1).height = 30;
+
+    // Column headers
+    const headerRow = ws.addRow([
+      "Date",
+      "Driver Name",
+      "Car Type",
+      "Plate No.",
+      "Entry Type",
+      "Amount",
+      "Driver Balance After",
+      "Transaction Ref",
+      "Sender / Alias",
+      "Notes",
+    ]);
+    headerRow.height = 24;
+    headerRow.eachCell((cell) => {
+      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF334155" } };
+      cell.font = { name: "Arial", size: 10, bold: true, color: { argb: "FFFFFFFF" } };
+      cell.alignment = { vertical: "middle", horizontal: "center" };
+      cell.border = {
+        bottom: { style: "medium", color: { argb: "FF0F172A" } },
+        left: { style: "thin", color: { argb: "FF94A3B8" } },
+        right: { style: "thin", color: { argb: "FF94A3B8" } },
+      };
+    });
+
+    // Data rows
+    for (let i = 0; i < allEntries.length; i++) {
+      const e = allEntries[i];
+      const isPayment = e.type === "PAYMENT";
+      const row = ws.addRow([
+        e.entry_date.toLocaleDateString(),
+        e.worker_name,
+        e.car_type || "-",
+        e.number_plate || "-",
+        e.type,
+        e.amount,
+        e.running_balance,
+        e.transaction_ref || "-",
+        e.sender_name || "-",
+        e.note || "-",
+      ]);
+      row.height = 20;
+
+      row.getCell(1).alignment = { horizontal: "center" };
+      row.getCell(3).alignment = { horizontal: "center" };
+      row.getCell(4).alignment = { horizontal: "center" };
+      row.getCell(5).alignment = { horizontal: "center" };
+      row.getCell(6).alignment = { horizontal: "right" };
+      row.getCell(7).alignment = { horizontal: "right" };
+
+      row.getCell(6).numFmt = '"GHS "#,##0.00';
+      row.getCell(7).numFmt = '"GHS "#,##0.00';
+
+      row.getCell(5).font = {
+        bold: true,
+        color: { argb: isPayment ? "FF16A34A" : "FFDC2626" },
+      };
+
+      if (i % 2 === 1) {
+        row.eachCell((cell) => {
+          cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFF8FAFC" } };
+        });
+      }
+
+      row.eachCell((cell) => {
+        cell.border = {
+          top: { style: "thin", color: { argb: "FFE2E8F0" } },
+          bottom: { style: "thin", color: { argb: "FFE2E8F0" } },
+          left: { style: "thin", color: { argb: "FFE2E8F0" } },
+          right: { style: "thin", color: { argb: "FFE2E8F0" } },
+        };
+      });
+    }
+
+    ws.columns = [
+      { width: 14 }, // Date
+      { width: 24 }, // Driver Name
+      { width: 16 }, // Car Type
+      { width: 16 }, // Plate
+      { width: 16 }, // Type
+      { width: 18 }, // Amount
+      { width: 22 }, // Running Balance
+      { width: 24 }, // Transaction Ref
+      { width: 26 }, // Sender
+      { width: 32 }, // Notes
+    ];
+
+    // Freeze header rows
+    ws.views = [{ state: "frozen", ySplit: 2 }];
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    return Buffer.from(buffer);
+  }
 }

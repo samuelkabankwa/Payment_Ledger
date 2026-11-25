@@ -23,6 +23,7 @@ export default function App() {
   const [isAddWorkerOpen, setIsAddWorkerOpen] = useState(false);
   const [workerToEdit, setWorkerToEdit] = useState<Worker | null>(null);
   const [isTrainModalOpen, setIsTrainModalOpen] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   // Toasts
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -92,11 +93,13 @@ export default function App() {
 
   const handlePaymentSuccess = (msg: string) => {
     showToast('success', msg);
+    setRefreshKey((k) => k + 1);
     loadWorkers();
   };
 
   const handleWorkerSaved = (msg: string) => {
     showToast('success', msg);
+    setRefreshKey((k) => k + 1);
     loadWorkers();
   };
 
@@ -114,6 +117,7 @@ export default function App() {
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 pt-6">
         {selectedWorkerId ? (
           <WorkerDetailView
+            key={`${selectedWorkerId}-${refreshKey}`}
             workerId={selectedWorkerId}
             onBack={handleBackToWorkers}
             onOpenQuickAddWithWorker={(id) => handleOpenQuickAdd(id)}

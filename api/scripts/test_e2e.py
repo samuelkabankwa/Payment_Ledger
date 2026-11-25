@@ -3,7 +3,8 @@ import json
 import sys
 
 API_URL = "http://localhost:3001"
-WEB_URL = "http://localhost:3000"
+WEB_URL = "http://localhost:3005"
+
 
 def get(url):
     req = urllib.request.Request(url)
